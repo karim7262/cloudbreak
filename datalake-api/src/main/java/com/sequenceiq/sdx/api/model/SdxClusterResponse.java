@@ -52,6 +52,8 @@ public class SdxClusterResponse {
 
     private boolean detached;
 
+    private String databaseEngineVersion;
+
     public SdxClusterResponse() {
     }
 
@@ -60,7 +62,7 @@ public class SdxClusterResponse {
             SdxClusterShape clusterShape, String cloudStorageBaseLocation,
             FileSystemType cloudStorageFileSystemType, String runtime,
             boolean rangerRazEnabled, Map<String, String> tags, CertExpirationState certExpirationState,
-            String sdxClusterServiceVersion, boolean detached, boolean enableMultiAz) {
+            String sdxClusterServiceVersion, boolean detached, boolean enableMultiAz, String databaseEngineVersion) {
         this.crn = crn;
         this.name = name;
         this.status = status;
@@ -78,6 +80,7 @@ public class SdxClusterResponse {
         this.sdxClusterServiceVersion = sdxClusterServiceVersion;
         this.detached = detached;
         this.enableMultiAz = enableMultiAz;
+        this.databaseEngineVersion = databaseEngineVersion;
     }
 
     public String getCrn() {
@@ -240,6 +243,14 @@ public class SdxClusterResponse {
         this.enableMultiAz = enableMultiAz;
     }
 
+    public void setDatabaseEngineVersion(String databaseEngineVersion) {
+        this.databaseEngineVersion = databaseEngineVersion;
+    }
+
+    public String getDatabaseEngineVersion() {
+        return databaseEngineVersion;
+    }
+
     @Override
     public String toString() {
         return "SdxClusterResponse{" +
@@ -263,6 +274,7 @@ public class SdxClusterResponse {
                 ", sdxClusterServiceVersion=" + sdxClusterServiceVersion +
                 ", Detached=" + detached +
                 ", enableMultiAz=" + enableMultiAz +
+                ", databaseEngineVersion=" + databaseEngineVersion +
                 '}';
     }
 }
