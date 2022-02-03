@@ -23,6 +23,7 @@ public class DistroXDatabaseRequestToStackDatabaseRequestConverter {
     public DistroXDatabaseRequest convert(DatabaseRequest source) {
         DistroXDatabaseRequest request = new DistroXDatabaseRequest();
         request.setAvailabilityType(convertAvailabilityType(source.getAvailabilityType()));
+        request.setDatabaseEngineVersion(source.getDatabaseEngineVersion());
         return request;
     }
 
