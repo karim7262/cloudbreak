@@ -227,7 +227,7 @@ public class InstanceMetaData implements ProvisionEntity {
 
     public boolean isFailed() {
         return instanceStatus == InstanceStatus.FAILED || instanceStatus == InstanceStatus.ORCHESTRATION_FAILED
-                || instanceStatus == InstanceStatus.DECOMMISSION_FAILED;
+                || instanceStatus == InstanceStatus.DECOMMISSION_FAILED || instanceStatus == InstanceStatus.ZOMBIE;
     }
 
     public boolean isStopped() {
@@ -241,6 +241,7 @@ public class InstanceMetaData implements ProvisionEntity {
     public boolean isReachable() {
         return !isTerminated()
                 && !isDeletedOnProvider()
+                && !InstanceStatus.ZOMBIE.equals(instanceStatus)
                 && !InstanceStatus.ORCHESTRATION_FAILED.equals(instanceStatus)
                 && !InstanceStatus.FAILED.equals(instanceStatus)
                 && !InstanceStatus.STOPPED.equals(instanceStatus);
@@ -248,6 +249,10 @@ public class InstanceMetaData implements ProvisionEntity {
 
     public boolean isDeletedOnProvider() {
         return InstanceStatus.DELETED_ON_PROVIDER_SIDE.equals(instanceStatus) || InstanceStatus.DELETED_BY_PROVIDER.equals(instanceStatus);
+    }
+
+    public boolean isZombie() {
+        return InstanceStatus.ZOMBIE.equals(instanceStatus);
     }
 
     public boolean isHealthy() {

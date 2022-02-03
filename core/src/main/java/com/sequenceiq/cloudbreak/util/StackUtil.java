@@ -44,6 +44,7 @@ import com.sequenceiq.cloudbreak.domain.view.StackView;
 import com.sequenceiq.cloudbreak.dto.credential.Credential;
 import com.sequenceiq.cloudbreak.orchestrator.host.HostOrchestrator;
 import com.sequenceiq.cloudbreak.orchestrator.model.Node;
+import com.sequenceiq.cloudbreak.orchestrator.model.NodeReachabilityResult;
 import com.sequenceiq.cloudbreak.orchestrator.model.NodeVolumes;
 import com.sequenceiq.cloudbreak.service.GatewayConfigService;
 import com.sequenceiq.cloudbreak.service.LoadBalancerConfigService;
@@ -83,7 +84,7 @@ public class StackUtil {
         Set<Node> agents = new HashSet<>();
         for (InstanceGroup instanceGroup : stack.getInstanceGroups()) {
             if (instanceGroup.getNodeCount() != 0) {
-                for (InstanceMetaData im : instanceGroup.getNotDeletedInstanceMetaDataSet()) {
+                for (InstanceMetaData im : instanceGroup.getNotDeletedAndNotZombieInstanceMetaDataSet()) {
                     if (im.getDiscoveryFQDN() != null) {
                         String instanceId = im.getInstanceId();
                         String instanceType = instanceGroup.getTemplate().getInstanceType();
@@ -111,6 +112,23 @@ public class StackUtil {
                 .collect(Collectors.toSet());
     }
 
+    public NodeReachabilityResult collectReachableAndUnreachableCandidateNodes(Stack stack, Collection<String> necessaryNodes) {
+        NodeReachabilityResult nodeReachabilityResult = collectReachableAndUnreachableNodes(stack);
+        Set<Node> reachableCandidateNodes = nodeReachabilityResult.getReachableNodes().stream()
+                .filter(node -> necessaryNodes.contains(node.getHostname()))
+                .collect(Collectors.toSet());
+        Set<Node> unreachableCandidateNodes = nodeReachabilityResult.getUnreachableNodes().stream()
+                .filter(node -> necessaryNodes.contains(node.getHostname()))
+                .collect(Collectors.toSet());
+
+        NodeReachabilityResult nodeReachabilityResultWithCandidates = new NodeReachabilityResult(reachableCandidateNodes, unreachableCandidateNodes);
+        if (!unreachableCandidateNodes.isEmpty()) {
+            LOGGER.warn("Some candidate nodes are unreachable: {}", nodeReachabilityResultWithCandidates.getUnreachableHosts());
+        }
+        LOGGER.debug("Candidate node reachability result: {}", nodeReachabilityResultWithCandidates);
+        return nodeReachabilityResultWithCandidates;
+    }
+
     public Set<Node> collectAndCheckReachableNodes(Stack stack, Collection<String> necessaryNodes) throws NodesUnreachableException {
         Set<Node> reachableNodes = collectReachableNodes(stack);
         Set<String> reachableAddresses = reachableNodes.stream().map(Node::getHostname).collect(Collectors.toSet());
@@ -125,7 +143,14 @@ public class StackUtil {
     }
 
     public Set<Node> collectReachableNodes(Stack stack) {
-        return hostOrchestrator.getResponsiveNodes(collectNodes(stack), gatewayConfigService.getPrimaryGatewayConfig(stack));
+        return hostOrchestrator.getResponsiveNodes(collectNodes(stack), gatewayConfigService.getPrimaryGatewayConfig(stack)).getReachableNodes();
+    }
+
+    public NodeReachabilityResult collectReachableAndUnreachableNodes(Stack stack) {
+        NodeReachabilityResult nodeReachabilityResult = hostOrchestrator.getResponsiveNodes(collectNodes(stack),
+                gatewayConfigService.getPrimaryGatewayConfig(stack));
+        LOGGER.debug("Node reachability result: {}", nodeReachabilityResult);
+        return nodeReachabilityResult;
     }
 
     public Set<Node> collectNodesFromHostnames(Stack stack, Set<String> hostnames) {
@@ -155,7 +180,7 @@ public class StackUtil {
         Map<String, Map<String, Object>> instanceToVolumeInfoMap = createInstanceToVolumeInfoMap(volumeSets);
         for (InstanceGroup instanceGroup : stack.getInstanceGroups()) {
             if (instanceGroup.getNodeCount() != 0) {
-                for (InstanceMetaData im : instanceGroup.getNotDeletedInstanceMetaDataSet()) {
+                for (InstanceMetaData im : instanceGroup.getNotDeletedAndNotZombieInstanceMetaDataSet()) {
                     if (im.getDiscoveryFQDN() != null && (newNodeAddresses.isEmpty() || newNodeAddresses.contains(im.getPrivateIp()))) {
                         String instanceId = im.getInstanceId();
                         String instanceType = instanceGroup.getTemplate().getInstanceType();

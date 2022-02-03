@@ -512,14 +512,32 @@ public class Stack implements ProvisionEntity, WorkspaceAwareResource {
         return nodeCount;
     }
 
+    public Set<InstanceMetaData> getNotTerminatedAndNotZombieInstanceMetaDataSet() {
+        return instanceGroups.stream()
+                .flatMap(instanceGroup -> instanceGroup.getNotTerminatedAndNotZombieInstanceMetaDataSet().stream())
+                .collect(Collectors.toSet());
+    }
+
     public Set<InstanceMetaData> getNotTerminatedInstanceMetaDataSet() {
         return instanceGroups.stream()
                 .flatMap(instanceGroup -> instanceGroup.getNotTerminatedInstanceMetaDataSet().stream())
                 .collect(Collectors.toSet());
     }
 
-    public List<InstanceMetaData> getNotTerminatedInstanceMetaDataList() {
-        return new ArrayList<>(getNotTerminatedInstanceMetaDataSet());
+    public List<InstanceMetaData> getNotTerminatedAndNotZombieInstanceMetaDataList() {
+        return new ArrayList<>(getNotTerminatedAndNotZombieInstanceMetaDataSet());
+    }
+
+    public Set<InstanceMetaData> getNotDeletedAndNotZombieInstanceMetaDataSet() {
+        return instanceGroups.stream()
+                .flatMap(instanceGroup -> instanceGroup.getNotDeletedAndNotZombieInstanceMetaDataSet().stream())
+                .collect(Collectors.toSet());
+    }
+
+    public Set<InstanceMetaData> getZombieInstanceMetaDataSet() {
+        return instanceGroups.stream()
+                .flatMap(instanceGroup -> instanceGroup.getZombieInstanceMetaDataSet().stream())
+                .collect(Collectors.toSet());
     }
 
     public Set<InstanceMetaData> getNotDeletedInstanceMetaDataSet() {
@@ -540,8 +558,8 @@ public class Stack implements ProvisionEntity, WorkspaceAwareResource {
                 .collect(Collectors.toSet());
     }
 
-    public List<InstanceMetaData> getNotDeletedInstanceMetaDataList() {
-        return new ArrayList<>(getNotDeletedInstanceMetaDataSet());
+    public List<InstanceMetaData> getNotDeletedAndNotZombieInstanceMetaDataList() {
+        return new ArrayList<>(getNotDeletedAndNotZombieInstanceMetaDataSet());
     }
 
     public List<InstanceMetaData> getInstanceMetaDataAsList() {
@@ -582,6 +600,13 @@ public class Stack implements ProvisionEntity, WorkspaceAwareResource {
         this.parameters = parameters;
     }
 
+    public List<InstanceMetaData> getNotTerminatedAndNotZombieGatewayInstanceMetadata() {
+        return instanceGroups.stream()
+                .filter(ig -> InstanceGroupType.GATEWAY.equals(ig.getInstanceGroupType()))
+                .flatMap(ig -> ig.getNotTerminatedAndNotZombieInstanceMetaDataSet().stream())
+                .collect(Collectors.toList());
+    }
+
     public List<InstanceMetaData> getNotTerminatedGatewayInstanceMetadata() {
         return instanceGroups.stream()
                 .filter(ig -> InstanceGroupType.GATEWAY.equals(ig.getInstanceGroupType()))
@@ -597,7 +622,7 @@ public class Stack implements ProvisionEntity, WorkspaceAwareResource {
     }
 
     public InstanceMetaData getPrimaryGatewayInstance() {
-        Optional<InstanceMetaData> metaData = getNotTerminatedGatewayInstanceMetadata().stream()
+        Optional<InstanceMetaData> metaData = getNotTerminatedAndNotZombieGatewayInstanceMetadata().stream()
                 .filter(im -> InstanceMetadataType.GATEWAY_PRIMARY.equals(im.getInstanceMetadataType())).findFirst();
         return metaData.orElse(null);
     }
