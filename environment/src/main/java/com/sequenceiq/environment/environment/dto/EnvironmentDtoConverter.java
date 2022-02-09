@@ -28,6 +28,7 @@ import com.sequenceiq.environment.credential.v1.converter.CredentialViewConverte
 import com.sequenceiq.environment.environment.EnvironmentStatus;
 import com.sequenceiq.environment.environment.domain.Environment;
 import com.sequenceiq.environment.environment.domain.EnvironmentTags;
+import com.sequenceiq.environment.environment.domain.EnvironmentView;
 import com.sequenceiq.environment.environment.domain.Region;
 import com.sequenceiq.environment.network.v1.converter.EnvironmentNetworkConverter;
 import com.sequenceiq.environment.parameters.dao.domain.AwsParameters;
@@ -85,6 +86,49 @@ public class EnvironmentDtoConverter {
         this.crnUserDetailsService = crnUserDetailsService;
     }
 
+    public EnvironmentDto environmentToDto(EnvironmentView environment) {
+        EnvironmentDto.Builder builder = EnvironmentDto.builder()
+                .withId(environment.getId())
+                .withResourceCrn(environment.getResourceCrn())
+                .withName(environment.getName())
+                .withDescription(environment.getDescription())
+                .withAccountId(environment.getAccountId())
+                .withArchived(environment.isArchived())
+                .withCloudPlatform(environment.getCloudPlatform())
+                .withCredentialView(environment.getCredential())
+                .withDeletionTimestamp(environment.getDeletionTimestamp())
+                .withLocationDto(environmentToLocationDto(environment))
+                .withRegions(environment.getRegionSet())
+                .withTelemetry(environment.getTelemetry())
+                .withBackup(environment.getBackup())
+                .withEnvironmentStatus(environment.getStatus())
+                .withCreator(environment.getCreator())
+                .withAuthentication(authenticationDtoConverter.authenticationToDto(environment.getAuthentication()))
+                .withFreeIpaCreation(environmentToFreeIpaCreationDto(environment))
+                .withCreated(environment.getCreated())
+                .withStatusReason(environment.getStatusReason())
+                .withExperimentalFeatures(environment.getExperimentalFeaturesJson())
+                .withTags(environment.getEnvironmentTags())
+                .withSecurityAccess(environmentToSecurityAccessDto(environment.getCidr(), environment.getSecurityGroupIdForKnox(),
+                        environment.getSecurityGroupIdForKnox()))
+                .withAdminGroupName(environment.getAdminGroupName())
+                .withProxyConfig(environment.getProxyConfig())
+                .withEnvironmentDeletionType(environment.getDeletionType())
+                .withEnvironmentServiceVersion(environment.getEnvironmentServiceVersion())
+                .withEnvironmentDomain(environment.getDomain());
+
+        CloudPlatform cloudPlatform = CloudPlatform.valueOf(environment.getCloudPlatform());
+        doIfNotNull(environment.getParameters(), parameters -> builder.withParameters(
+                environmentParamsConverterMap.get(cloudPlatform).convertToDto(parameters)));
+        doIfNotNull(environment.getNetwork(), network -> builder.withNetwork(
+                environmentNetworkConverterMap.get(cloudPlatform).convertToDto(network)));
+        doIfNotNull(environment.getParentEnvironment(), parentEnvironment -> builder
+                .withParentEnvironmentCrn(parentEnvironment.getResourceCrn())
+                .withParentEnvironmentName(parentEnvironment.getName())
+                .withParentEnvironmentCloudPlatform(parentEnvironment.getCloudPlatform()));
+        return builder.build();
+    }
+
     public EnvironmentDto environmentToDto(Environment environment) {
         EnvironmentDto.Builder builder = EnvironmentDto.builder()
                 .withId(environment.getId())
@@ -109,7 +153,8 @@ public class EnvironmentDtoConverter {
                 .withStatusReason(environment.getStatusReason())
                 .withExperimentalFeatures(environment.getExperimentalFeaturesJson())
                 .withTags(environment.getEnvironmentTags())
-                .withSecurityAccess(environmentToSecurityAccessDto(environment))
+                .withSecurityAccess(environmentToSecurityAccessDto(environment.getCidr(), environment.getSecurityGroupIdForKnox(),
+                        environment.getSecurityGroupIdForKnox()))
                 .withAdminGroupName(environment.getAdminGroupName())
                 .withProxyConfig(environment.getProxyConfig())
                 .withEnvironmentDeletionType(environment.getDeletionType())
@@ -181,15 +226,24 @@ public class EnvironmentDtoConverter {
                 .build();
     }
 
+    public LocationDto environmentToLocationDto(EnvironmentView environment) {
+        return LocationDto.builder()
+                .withName(environment.getLocation())
+                .withDisplayName(environment.getLocationDisplayName())
+                .withLongitude(environment.getLongitude())
+                .withLatitude(environment.getLatitude())
+                .build();
+    }
+
     private String getUserNameFromCrn(String crn) {
         return crnUserDetailsService.loadUserByUsername(crn).getUsername();
     }
 
-    private SecurityAccessDto environmentToSecurityAccessDto(Environment environment) {
+    private SecurityAccessDto environmentToSecurityAccessDto(String cidr, String securityGroupIdForKnox, String defaultSecurityGroupId) {
         return SecurityAccessDto.builder()
-                .withCidr(environment.getCidr())
-                .withSecurityGroupIdForKnox(environment.getSecurityGroupIdForKnox())
-                .withDefaultSecurityGroupId(environment.getDefaultSecurityGroupId())
+                .withCidr(cidr)
+                .withSecurityGroupIdForKnox(securityGroupIdForKnox)
+                .withDefaultSecurityGroupId(defaultSecurityGroupId)
                 .build();
     }
 
@@ -198,7 +252,7 @@ public class EnvironmentDtoConverter {
         Map<String, String> userDefinedTags = creationDto.getTags();
         Set<AccountTag> accountTags = accountTagService.get(creationDto.getAccountId());
         List<AccountTagResponse> accountTagResponses = accountTags.stream()
-                .map(a -> accountTagToAccountTagResponsesConverter.convert(a))
+                .map(accountTagToAccountTagResponsesConverter::convert)
                 .collect(Collectors.toList());
         defaultInternalAccountTagService.merge(accountTagResponses);
         Map<String, String> accountTagsMap = accountTagResponses
@@ -227,19 +281,31 @@ public class EnvironmentDtoConverter {
     }
 
     private FreeIpaCreationDto environmentToFreeIpaCreationDto(Environment environment) {
+        return getFreeIpaCreationDto(environment.isCreateFreeIpa(), environment.getFreeIpaInstanceCountByGroup(), environment.getFreeIpaImageCatalog(),
+                environment.getFreeIpaImageId(), environment.isFreeIpaEnableMultiAz(), environment.getCloudPlatform(),
+                (AwsParameters) environment.getParameters());
+    }
+
+    private FreeIpaCreationDto environmentToFreeIpaCreationDto(EnvironmentView environment) {
+        return getFreeIpaCreationDto(environment.isCreateFreeIpa(), environment.getFreeIpaInstanceCountByGroup(), environment.getFreeIpaImageCatalog(),
+                environment.getFreeIpaImageId(), environment.isFreeIpaEnableMultiAz(), environment.getCloudPlatform(),
+                (AwsParameters) environment.getParameters());
+    }
+
+    private FreeIpaCreationDto getFreeIpaCreationDto(boolean createFreeIpa, Integer freeIpaInstanceCountByGroup, String freeIpaImageCatalog,
+            String freeIpaImageId, boolean freeIpaEnableMultiAz, String cloudPlatform, AwsParameters parameters) {
         FreeIpaCreationDto.Builder builder = FreeIpaCreationDto.builder()
-                .withCreate(environment.isCreateFreeIpa());
-        Optional.ofNullable(environment.getFreeIpaInstanceCountByGroup()).ifPresent(builder::withInstanceCountByGroup);
-        builder.withImageCatalog(environment.getFreeIpaImageCatalog());
-        builder.withImageId(environment.getFreeIpaImageId());
-        builder.withEnableMultiAz(environment.isFreeIpaEnableMultiAz());
-        if (environment.getCloudPlatform().equals(CloudPlatform.AWS.name())) {
-            AwsParameters awsParameters = (AwsParameters) environment.getParameters();
-            if (Objects.nonNull(awsParameters)) {
+                .withCreate(createFreeIpa);
+        Optional.ofNullable(freeIpaInstanceCountByGroup).ifPresent(builder::withInstanceCountByGroup);
+        builder.withImageCatalog(freeIpaImageCatalog);
+        builder.withImageId(freeIpaImageId);
+        builder.withEnableMultiAz(freeIpaEnableMultiAz);
+        if (cloudPlatform.equals(CloudPlatform.AWS.name())) {
+            if (Objects.nonNull(parameters)) {
                 builder.withAws(FreeIpaCreationAwsParametersDto.builder()
                         .withSpot(FreeIpaCreationAwsSpotParametersDto.builder()
-                                .withPercentage(awsParameters.getFreeIpaSpotPercentage())
-                                .withMaxPrice(awsParameters.getFreeIpaSpotMaxPrice())
+                                .withPercentage(parameters.getFreeIpaSpotPercentage())
+                                .withMaxPrice(parameters.getFreeIpaSpotMaxPrice())
                                 .build())
                         .build());
             }

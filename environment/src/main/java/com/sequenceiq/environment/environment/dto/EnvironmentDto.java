@@ -26,6 +26,7 @@ import com.sequenceiq.environment.environment.dto.telemetry.EnvironmentTelemetry
 import com.sequenceiq.environment.network.dto.NetworkDto;
 import com.sequenceiq.environment.parameter.dto.ParametersDto;
 import com.sequenceiq.environment.proxy.domain.ProxyConfig;
+import com.sequenceiq.environment.proxy.domain.ProxyConfigBase;
 
 public class EnvironmentDto implements Payload, AccountAwareResource, EnvironmentDetails {
 
@@ -87,7 +88,7 @@ public class EnvironmentDto implements Payload, AccountAwareResource, Environmen
 
     private String parentEnvironmentCloudPlatform;
 
-    private ProxyConfig proxyConfig;
+    private ProxyConfigBase proxyConfig;
 
     private String environmentServiceVersion;
 
@@ -380,19 +381,19 @@ public class EnvironmentDto implements Payload, AccountAwareResource, Environmen
     @Override
     public ProxyDetails getProxyDetails() {
         ProxyDetails.Builder builder = ProxyDetails.Builder.builder();
-        if (proxyConfig != null) {
+        if (proxyConfig != null && proxyConfig instanceof ProxyConfig) {
             builder = builder.withEnabled(true)
                     .withProtocol(proxyConfig.getProtocol())
-                    .withAuthentication(StringUtils.isNoneEmpty(proxyConfig.getUserName()));
+                    .withAuthentication(StringUtils.isNoneEmpty(((ProxyConfig) proxyConfig).getUserName()));
         }
         return builder.build();
     }
 
-    public ProxyConfig getProxyConfig() {
+    public ProxyConfigBase getProxyConfig() {
         return proxyConfig;
     }
 
-    public void setProxyConfig(ProxyConfig proxyConfig) {
+    public void setProxyConfig(ProxyConfigBase proxyConfig) {
         this.proxyConfig = proxyConfig;
     }
 
@@ -495,7 +496,7 @@ public class EnvironmentDto implements Payload, AccountAwareResource, Environmen
 
         private ParametersDto parameters;
 
-        private ExperimentalFeatures experimentalFeatures;
+        private ExperimentalFeatures experimentalFeatures = new ExperimentalFeatures();
 
         private EnvironmentTags tags;
 
@@ -505,7 +506,7 @@ public class EnvironmentDto implements Payload, AccountAwareResource, Environmen
 
         private String parentEnvironmentCloudPlatform;
 
-        private ProxyConfig proxyConfig;
+        private ProxyConfigBase proxyConfig;
 
         private String environmentServiceVersion;
 
@@ -661,7 +662,7 @@ public class EnvironmentDto implements Payload, AccountAwareResource, Environmen
             return this;
         }
 
-        public Builder withProxyConfig(ProxyConfig proxyConfig) {
+        public Builder withProxyConfig(ProxyConfigBase proxyConfig) {
             this.proxyConfig = proxyConfig;
             return this;
         }

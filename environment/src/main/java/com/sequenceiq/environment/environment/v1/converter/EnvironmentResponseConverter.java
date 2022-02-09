@@ -47,6 +47,7 @@ import com.sequenceiq.environment.parameter.dto.GcpParametersDto;
 import com.sequenceiq.environment.parameter.dto.GcpResourceEncryptionParametersDto;
 import com.sequenceiq.environment.parameter.dto.ParametersDto;
 import com.sequenceiq.environment.parameter.dto.ResourceGroupUsagePattern;
+import com.sequenceiq.environment.proxy.domain.ProxyConfig;
 import com.sequenceiq.environment.proxy.v1.converter.ProxyConfigToProxyResponseConverter;
 
 @Component
@@ -121,7 +122,7 @@ public class EnvironmentResponseConverter {
                 .withEnvironmentDomain(environmentDto.getDomain());
 
         NullUtil.doIfNotNull(environmentDto.getProxyConfig(),
-                proxyConfig -> builder.withProxyConfig(proxyConfigToProxyResponseConverter.convert(environmentDto.getProxyConfig())));
+                proxyConfig -> builder.withProxyConfig(proxyConfigToProxyResponseConverter.convert((ProxyConfig) environmentDto.getProxyConfig())));
         NullUtil.doIfNotNull(environmentDto.getNetwork(),
                 network -> builder.withNetwork(networkDtoToResponse(network, environmentDto.getExperimentalFeatures().getTunnel(), true)));
         NullUtil.doIfNotNull(environmentDto.getSecurityAccess(), securityAccess -> builder.withSecurityAccess(securityAccessDtoToResponse(securityAccess)));

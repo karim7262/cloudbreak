@@ -29,9 +29,9 @@ import com.sequenceiq.authorization.service.OwnerAssignmentService;
 import com.sequenceiq.authorization.service.ResourcePropertyProvider;
 import com.sequenceiq.authorization.service.list.ResourceWithId;
 import com.sequenceiq.cloudbreak.auth.ThreadBasedUserCrnProvider;
-import com.sequenceiq.cloudbreak.auth.crn.Crn;
 import com.sequenceiq.cloudbreak.auth.altus.GrpcUmsClient;
 import com.sequenceiq.cloudbreak.auth.altus.service.RoleCrnGenerator;
+import com.sequenceiq.cloudbreak.auth.crn.Crn;
 import com.sequenceiq.cloudbreak.cloud.model.CloudRegions;
 import com.sequenceiq.cloudbreak.cloud.model.Coordinate;
 import com.sequenceiq.cloudbreak.common.event.PayloadContext;
@@ -357,23 +357,17 @@ public class EnvironmentService extends AbstractAccountAwareResourceService<Envi
 
     @Override
     public String getResourceCrnByResourceName(String resourceName) {
-        return getByNameAndAccountId(resourceName, ThreadBasedUserCrnProvider.getAccountId()).getResourceCrn();
+        return getCrnByNameAndAccountId(resourceName, ThreadBasedUserCrnProvider.getAccountId());
     }
 
     @Override
     public List<String> getResourceCrnListByResourceNameList(List<String> resourceNames) {
-        return resourceNames.stream()
-                .map(resourceName -> getByNameAndAccountId(resourceName, ThreadBasedUserCrnProvider.getAccountId()).getResourceCrn())
-                .collect(Collectors.toList());
+        return environmentRepository.findAllCrnByNameInAndAccountIdAndArchivedIsFalse(resourceNames, ThreadBasedUserCrnProvider.getAccountId());
     }
 
     @Override
     public Optional<AuthorizationResourceType> getSupportedAuthorizationResourceType() {
         return Optional.of(AuthorizationResourceType.ENVIRONMENT);
-    }
-
-    public List<String> findNameWithAccountIdAndParentEnvIdAndArchivedIsFalse(String accountId, Long parentEnvironmentId) {
-        return environmentRepository.findNameWithAccountIdAndParentEnvIdAndArchivedIsFalse(accountId, parentEnvironmentId);
     }
 
     public List<Environment> findAllByAccountIdAndParentEnvIdAndArchivedIsFalse(String accountId, Long parentEnvironmentId) {

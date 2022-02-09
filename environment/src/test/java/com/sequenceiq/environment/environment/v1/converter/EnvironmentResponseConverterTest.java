@@ -119,7 +119,7 @@ public class EnvironmentResponseConverterTest {
         when(regionConverter.convertRegions(environment.getRegions())).thenReturn(compactRegionResponse);
         when(telemetryApiConverter.convert(environment.getTelemetry())).thenReturn(telemetryResponse);
         when(backupConverter.convert(environment.getBackup())).thenReturn(backupResponse);
-        when(proxyConfigToProxyResponseConverter.convert(environment.getProxyConfig())).thenReturn(proxyResponse);
+        when(proxyConfigToProxyResponseConverter.convert((ProxyConfig) environment.getProxyConfig())).thenReturn(proxyResponse);
         when(networkDtoToResponseConverter.convert(environment.getNetwork(), environment.getExperimentalFeatures().getTunnel(), true))
                 .thenReturn(environmentNetworkResponse);
 
@@ -159,7 +159,7 @@ public class EnvironmentResponseConverterTest {
         verify(freeIpaConverter).convert(environment.getFreeIpaCreation());
         verify(regionConverter).convertRegions(environment.getRegions());
         verify(telemetryApiConverter).convert(environment.getTelemetry());
-        verify(proxyConfigToProxyResponseConverter).convert(environment.getProxyConfig());
+        verify(proxyConfigToProxyResponseConverter).convert((ProxyConfig) environment.getProxyConfig());
         verify(networkDtoToResponseConverter).convert(environment.getNetwork(), environment.getExperimentalFeatures().getTunnel(), true);
     }
 
