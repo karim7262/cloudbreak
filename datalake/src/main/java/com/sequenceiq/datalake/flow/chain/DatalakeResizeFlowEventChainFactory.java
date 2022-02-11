@@ -12,6 +12,8 @@ import static com.sequenceiq.datalake.flow.stop.SdxStopEvent.SDX_STOP_EVENT;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import javax.inject.Inject;
+
 import org.springframework.stereotype.Component;
 
 import com.sequenceiq.cloudbreak.common.event.Selectable;
@@ -23,12 +25,18 @@ import com.sequenceiq.datalake.flow.dr.backup.DatalakeBackupFailureReason;
 import com.sequenceiq.datalake.flow.dr.backup.event.DatalakeTriggerBackupEvent;
 import com.sequenceiq.datalake.flow.dr.restore.DatalakeRestoreFailureReason;
 import com.sequenceiq.datalake.flow.dr.restore.event.DatalakeTriggerRestoreEvent;
+import com.sequenceiq.datalake.flow.freeipa.upscale.event.FreeIpaUpscaleStartEvent;
 import com.sequenceiq.datalake.flow.stop.event.SdxStartStopEvent;
+import com.sequenceiq.datalake.service.FreeipaService;
 import com.sequenceiq.flow.core.chain.FlowEventChainFactory;
 import com.sequenceiq.flow.core.chain.config.FlowTriggerEventQueue;
+import com.sequenceiq.freeipa.api.v1.freeipa.stack.model.common.FormFactor;
 
 @Component
 public class DatalakeResizeFlowEventChainFactory implements FlowEventChainFactory<DatalakeResizeFlowChainStartEvent> {
+
+    @Inject
+    private FreeipaService freeipaService;
 
     @Override
     public String initEvent() {
@@ -40,6 +48,10 @@ public class DatalakeResizeFlowEventChainFactory implements FlowEventChainFactor
         Queue<Selectable> chain = new ConcurrentLinkedQueue<>();
 
 
+        String envCrn = event.getSdxCluster().getEnvCrn();
+        if (FormFactor.HA.getInstanceCount() > freeipaService.getNodeCount(envCrn)) {
+            chain.add(new FreeIpaUpscaleStartEvent(event.getResourceId(), event.getUserId(), envCrn));
+        }
         if (event.shouldTakeBackup()) {
             //take a backup
             chain.add(new DatalakeTriggerBackupEvent(DATALAKE_TRIGGER_BACKUP_EVENT.event(),
