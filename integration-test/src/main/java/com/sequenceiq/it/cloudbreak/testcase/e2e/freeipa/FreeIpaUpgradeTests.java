@@ -4,13 +4,32 @@ import static com.sequenceiq.freeipa.api.v1.operation.model.OperationState.COMPL
 import static com.sequenceiq.freeipa.api.v1.operation.model.OperationState.RUNNING;
 import static com.sequenceiq.it.cloudbreak.context.RunningParameter.key;
 import static com.sequenceiq.it.cloudbreak.context.RunningParameter.waitForFlow;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.inject.Inject;
 
+import com.sequenceiq.cloudbreak.api.endpoint.v4.stacks.response.instancegroup.InstanceGroupV4Response;
 import com.sequenceiq.freeipa.api.v1.kerberosmgmt.model.HostKeytabRequest;
+import com.sequenceiq.it.cloudbreak.SdxClient;
+import com.sequenceiq.it.cloudbreak.assertion.distrox.AwsAvailabilityZoneAssertion;
+import com.sequenceiq.it.cloudbreak.client.DistroXTestClient;
+import com.sequenceiq.it.cloudbreak.client.SdxTestClient;
+import com.sequenceiq.it.cloudbreak.cloud.HostGroupType;
+import com.sequenceiq.it.cloudbreak.cloud.v4.CommonClusterManagerProperties;
+import com.sequenceiq.it.cloudbreak.dto.CloudbreakTestDto;
+import com.sequenceiq.it.cloudbreak.dto.distrox.DistroXTestDto;
+import com.sequenceiq.it.cloudbreak.dto.sdx.SdxTestDto;
+import com.sequenceiq.it.cloudbreak.util.ssh.action.SshJClientActions;
+import com.sequenceiq.sdx.api.model.SdxClusterStatusResponse;
+import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Assertions;
 import org.testng.annotations.Test;
 
@@ -44,8 +63,27 @@ public class FreeIpaUpgradeTests extends AbstractE2ETest {
 
     private static final long FIVE_MINUTES_IN_SEC = 5L * 60;
 
+    private static final String CHECK_DNS_CONFIG_CMD = "cat /etc/unbound/conf.d/60-domain-dns.conf";
+
+    private static final String CHECK_DNS_LOOKUP_CMD = "ping -c 2 github.infra.cloudera.com 2>/dev/null | egrep " +
+            "'(172.20.45.44)' | cut -d '(' -f 2 | cut -d ')' -f 1 | head -n 1 | wc -l";
+
     @Inject
     private FreeIpaTestClient freeIpaTestClient;
+
+    @Inject
+    private CommonClusterManagerProperties commonClusterManagerProperties;
+
+    @Inject
+    private SdxTestClient sdxTestClient;
+
+    @Inject
+    private DistroXTestClient distroXTestClient;
+
+    @Inject
+    private SshJClientActions sshJClientActions;
+
+    private String serverIp;
 
     @Test(dataProvider = TEST_CONTEXT)
     @Description(
@@ -107,6 +145,82 @@ public class FreeIpaUpgradeTests extends AbstractE2ETest {
                 .await(FREEIPA_AVAILABLE, waitForFlow().withWaitForFlow(Boolean.FALSE))
                 .then((tc, testDto, client) -> freeIpaTestClient.delete().action(tc, testDto, client))
                 .await(FREEIPA_DELETE_COMPLETED, waitForFlow().withWaitForFlow(Boolean.FALSE))
+                .validate();
+    }
+
+    @Test(dataProvider = TEST_CONTEXT)
+    @Description(
+            given = "there is a running cloudbreak",
+            when = "a valid stack create request is sent with 1 FreeIPA instance and attached cluster" +
+                    "and the stack is upgraded one node at a time",
+            then = "the stack should be available AND deletable")
+    public void testSingleFreeIpaInstanceUpgradeWithAttachedCluster(TestContext testContext) {
+        String freeIpa = resourcePropertyProvider().getName();
+        String sdxName = resourcePropertyProvider().getName();
+        String distroXName = resourcePropertyProvider().getName();
+        testContext
+                .given("telemetry", TelemetryTestDto.class)
+                .withLogging()
+                .withReportClusterLogs()
+                .given(freeIpa, FreeIpaTestDto.class)
+                .withTelemetry("telemetry")
+                .withUpgradeCatalogAndImage()
+                .when(freeIpaTestClient.create(), key(freeIpa))
+                .await(FREEIPA_AVAILABLE);
+        testContext
+                .given(sdxName, SdxTestDto.class)
+                .withCloudStorage()
+                .when(sdxTestClient.create(), key(sdxName))
+                .await(SdxClusterStatusResponse.RUNNING, key(sdxName))
+                .awaitForHealthyInstances()
+                .validate();
+        testContext
+                .given(distroXName, DistroXTestDto.class)
+                .withPreferredSubnetsForInstanceNetworkIfMultiAzEnabledOrJustFirst()
+                .when(distroXTestClient.create(), key(distroXName))
+                .await(STACK_AVAILABLE)
+                .awaitForHealthyInstances()
+                .then(new AwsAvailabilityZoneAssertion())
+                .validate();
+        testContext
+                .given(freeIpa, FreeIpaTestDto.class)
+                .when(freeIpaTestClient.upgrade())
+                .await(Status.UPDATE_IN_PROGRESS, waitForFlow().withWaitForFlow(Boolean.FALSE))
+                .given(FreeIpaOperationStatusTestDto.class)
+                .withOperationId(((FreeIpaTestDto) testContext.get(freeIpa)).getOperationId())
+                .then((tc, testDto, freeIpaClient) -> testFreeIpaAvailabilityDuringUpgrade(tc, testDto, freeIpaClient, freeIpa))
+                .await(COMPLETED)
+                .given(freeIpa, FreeIpaTestDto.class)
+                .await(FREEIPA_AVAILABLE, waitForFlow().withWaitForFlow(Boolean.FALSE))
+                .then((tc, testDto, client) -> {
+                    serverIp = testDto.getResponse().getFreeIpa().getServerIp().iterator().next();
+                    return testDto;
+                })
+                .validate();
+        testContext
+                .given(distroXName, DistroXTestDto.class)
+                .when(distroXTestClient.get(), key(distroXName))
+                .then((tc, testDto, client) -> {
+                    Map<String, Pair<Integer, String>> result = sshJClientActions.executeSshCommand(getInstanceGroups(testDto),
+                            List.of(HostGroupType.MASTER.getName(), HostGroupType.WORKER.getName(),
+                                    HostGroupType.COMPUTE.getName()), CHECK_DNS_CONFIG_CMD, false);
+                    String elem = result.entrySet().iterator().next().getValue().getRight();
+                    String patternString = "forward-addr: ([\\d]+\\.[\\d]+\\.[\\d]+\\.[\\d]+)";
+                    Pattern pattern = Pattern.compile(patternString);
+                    Matcher matcher = pattern.matcher(elem);
+                    while (matcher.find()) {
+                        assertEquals("Incorrect name server address is set in the dns.conf", serverIp, matcher.group(1));
+                    }
+                    return testDto;
+                })
+                .then((tc, testDto, client) -> {
+                    Map<String, Pair<Integer, String>> result = sshJClientActions.executeSshCommand(getInstanceGroups(testDto),
+                            List.of(HostGroupType.MASTER.getName(), HostGroupType.WORKER.getName(),
+                                    HostGroupType.COMPUTE.getName()), CHECK_DNS_LOOKUP_CMD, false);
+                    String elem = result.entrySet().iterator().next().getValue().getRight();
+                    assertTrue("DNS lookup doesn't work", elem.contains("1"));
+                    return testDto;
+                })
                 .validate();
     }
 
@@ -233,5 +347,10 @@ public class FreeIpaUpgradeTests extends AbstractE2ETest {
     private boolean isSuccess(OperationStatus operationStatus) {
         OperationState operationState = operationStatus.getStatus();
         return COMPLETED == operationState;
+    }
+
+    private List<InstanceGroupV4Response> getInstanceGroups(DistroXTestDto testDto) {
+        return testDto.getResponse().getInstanceGroups();
+
     }
 }
