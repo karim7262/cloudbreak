@@ -164,6 +164,8 @@ message Event {
     CDPVMDiagnosticsEvent cdpVmDiagnosticsEvent = 76;
     // A CDP DataWarehouse Virtual Warehouse's nodes changed.
     CDPCDWVirtualWarehouseNodesChanged cdpCDWVirtualWarehouseNodesChanged = 77;
+    // A CDP stack patcher event fired.
+    CDPStackPatchEvent cdpStackPatchEvent = 79;
   }
 }
 
@@ -2476,5 +2478,26 @@ message CDPVMDiagnosticsFailureType {
     UPLOAD_FAILURE = 6;
     // Failure during cleaning up resources.
     CLEANUP_FAILURE = 7;
+  }
+}
+
+// Triggered when a CDP stack patcher either finds an affected stack, successfully patches it, or fails.
+message CDPStackPatchEvent {
+  // Resource CRN of the affected stack.
+  string resourceCrn = 1;
+  // Type of stack patch that affects the referenced stack.
+  string stackPatchType = 2;
+  // Type of the stack patch event.
+  CDPStackPatchEventType.Value eventType = 3;
+  // Optional message with more details about the event.
+  string message = 4;
+}
+
+// Type of stack patch event.
+message CDPStackPatchEventType {
+  enum Value {
+      AFFECTED = 0;
+      SUCCESS = 1;
+      FAILURE = 2;
   }
 }

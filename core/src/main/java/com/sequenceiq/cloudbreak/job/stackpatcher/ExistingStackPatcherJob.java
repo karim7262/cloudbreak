@@ -24,6 +24,7 @@ import com.sequenceiq.cloudbreak.service.stack.StackService;
 import com.sequenceiq.cloudbreak.service.stack.StackViewService;
 import com.sequenceiq.cloudbreak.service.stackpatch.ExistingStackPatchApplyException;
 import com.sequenceiq.cloudbreak.service.stackpatch.ExistingStackPatchService;
+import com.sequenceiq.cloudbreak.service.stackpatch.StackPatchUsageReporterService;
 
 import io.opentracing.Tracer;
 
@@ -47,6 +48,9 @@ public class ExistingStackPatcherJob extends StatusCheckerJob {
 
     @Inject
     private Collection<ExistingStackPatchService> existingStackPatchServices;
+
+    @Inject
+    private StackPatchUsageReporterService stackPatchUsageReporterService;
 
     public ExistingStackPatcherJob(Tracer tracer) {
         super(tracer, "Existing Stack Patcher Job");
@@ -96,14 +100,17 @@ public class ExistingStackPatcherJob extends StatusCheckerJob {
             try {
                 if (existingStackPatchService.isAffected(stack)) {
                     LOGGER.debug("Stack {} needs patch for {}", stack.getResourceCrn(), stackPatchType);
+                    stackPatchUsageReporterService.reportAffected(stack, stackPatchType);
                     existingStackPatchService.apply(stack);
                     LOGGER.info("Stack {} was patched successfully for {}", stack.getResourceCrn(), stackPatchType);
+                    stackPatchUsageReporterService.reportSuccess(stack, stackPatchType);
                 } else {
                     LOGGER.debug("Stack {} is not affected by {}", stack.getResourceCrn(), stackPatchType);
                 }
             } catch (ExistingStackPatchApplyException e) {
                 String message = String.format("Failed to patch stack %s for %s", stack.getResourceCrn(), stackPatchType);
                 LOGGER.error(message, e);
+                stackPatchUsageReporterService.reportFailure(stack, stackPatchType, e.getMessage());
                 throw new JobExecutionException(message, e);
             }
         } else {
