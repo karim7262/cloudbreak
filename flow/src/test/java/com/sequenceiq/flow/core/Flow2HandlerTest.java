@@ -405,7 +405,7 @@ public class Flow2HandlerTest {
         given(runningFlows.remove(FLOW_ID)).willReturn(flow);
         dummyEvent.setKey(FlowConstants.FLOW_FINAL);
         underTest.accept(dummyEvent);
-        verify(flowLogService, times(1)).close(anyLong(), eq(FLOW_ID));
+        verify(flowLogService, times(1)).close(anyLong(), eq(FLOW_ID), eq(false));
         verify(runningFlows, times(1)).remove(eq(FLOW_ID));
         verify(runningFlows, never()).get(eq(FLOW_ID));
         verify(runningFlows, never()).put(any(Flow.class), isNull(String.class));
@@ -420,7 +420,7 @@ public class Flow2HandlerTest {
         dummyEvent.getHeaders().set(FlowConstants.FLOW_CHAIN_ID, FLOW_CHAIN_ID);
         dummyEvent.getHeaders().set(FlowConstants.FLOW_TRIGGER_USERCRN, FLOW_TRIGGER_USERCRN);
         underTest.accept(dummyEvent);
-        verify(flowLogService, times(1)).close(anyLong(), eq(FLOW_ID));
+        verify(flowLogService, times(1)).close(anyLong(), eq(FLOW_ID), eq(false));
         verify(runningFlows, times(1)).remove(eq(FLOW_ID));
         verify(runningFlows, never()).get(eq(FLOW_ID));
         verify(runningFlows, never()).put(any(Flow.class), isNull(String.class));
@@ -435,7 +435,7 @@ public class Flow2HandlerTest {
         dummyEvent.setKey(FlowConstants.FLOW_FINAL);
         given(runningFlows.remove(anyString())).willReturn(flow);
         underTest.accept(dummyEvent);
-        verify(flowLogService, times(1)).close(anyLong(), eq(FLOW_ID));
+        verify(flowLogService, times(1)).close(anyLong(), eq(FLOW_ID), eq(false));
         verify(runningFlows, times(1)).remove(eq(FLOW_ID));
         verify(runningFlows, never()).get(eq(FLOW_ID));
         verify(runningFlows, never()).put(any(Flow.class), isNull(String.class));
@@ -451,7 +451,7 @@ public class Flow2HandlerTest {
         dummyEvent.getHeaders().set(FlowConstants.FLOW_CHAIN_ID, "FLOW_CHAIN_ID");
         given(runningFlows.remove(anyString())).willReturn(flow);
         underTest.accept(dummyEvent);
-        verify(flowLogService, times(1)).close(anyLong(), eq(FLOW_ID));
+        verify(flowLogService, times(1)).close(anyLong(), eq(FLOW_ID), eq(false));
         verify(runningFlows, times(1)).remove(eq(FLOW_ID));
         verify(runningFlows, never()).get(eq(FLOW_ID));
         verify(runningFlows, never()).put(any(Flow.class), isNull(String.class));
