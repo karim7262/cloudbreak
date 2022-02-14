@@ -7,6 +7,8 @@ import static org.junit.Assert.assertTrue;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.sequenceiq.cloudbreak.telemetry.TelemetryUpgradeConfiguration;
+
 public class MeteringConfigServiceTest {
 
     private MeteringConfigService underTest;
@@ -14,7 +16,9 @@ public class MeteringConfigServiceTest {
     @Before
     public void setUp() {
         MeteringConfiguration meteringConfiguration = new MeteringConfiguration(true, "app", "stream");
-        underTest = new MeteringConfigService(meteringConfiguration);
+        TelemetryUpgradeConfiguration upgradeConfigs = new TelemetryUpgradeConfiguration(
+                true, null, null, "2021-01-01");
+        underTest = new MeteringConfigService(meteringConfiguration, upgradeConfigs);
     }
 
     @Test
