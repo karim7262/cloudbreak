@@ -9,6 +9,7 @@ import static com.sequenceiq.cloudbreak.event.ResourceEvent.STACK_STOP_REQUESTED
 import static java.lang.Math.abs;
 import static java.lang.String.format;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -26,6 +27,7 @@ import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.stereotype.Service;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.sequenceiq.cloudbreak.api.endpoint.v4.autoscales.base.ScalingStrategy;
 import com.sequenceiq.cloudbreak.api.endpoint.v4.autoscales.request.InstanceGroupAdjustmentV4Request;
 import com.sequenceiq.cloudbreak.api.endpoint.v4.common.DetailedStackStatus;
@@ -142,11 +144,14 @@ public class StackOperationService {
         return flowManager.triggerStackRemoveInstances(stack.getId(), instanceIdsByHostgroupMap, forced);
     }
 
-    public FlowIdentifier stopInstances(Stack stack, Collection<String> instanceIds, boolean forced) {
+    public FlowIdentifier stopInstances(Stack stack, Collection<String> instanceIds, String hostGroup, boolean forced) {
         LOGGER.info("Received stop instances request for instanceIds: [{}]", instanceIds);
 
         if (instanceIds == null || instanceIds.isEmpty()) {
             throw new BadRequestException("Stop request cannot process an empty instanceIds collection");
+        }
+        if (Strings.isNullOrEmpty(hostGroup)) {
+            throw new BadRequestException("Stop request requires a host group to be specified.");
         }
         Map<String, Set<Long>> instanceIdsByHostgroupMap = new HashMap<>();
         Set<String> instanceIdsWithoutMetadata = new HashSet<>();
@@ -161,6 +166,10 @@ public class StackOperationService {
         if (instanceIdsByHostgroupMap.size() > 1) {
             throw new BadRequestException("Downscale via Instance Stop cannot process more than one host group");
         }
+        updateNodeCountValidator.validateInstanceGroup(stack, hostGroup);
+        if (!hostGroup.equalsIgnoreCase(new ArrayList<>(instanceIdsByHostgroupMap.keySet()).get(0))) {
+            throw new BadRequestException("The provided instanceIds do not belong to the provided host group.");
+        }
         LOGGER.info("InstanceIds without metadata: [{}]", instanceIdsWithoutMetadata);
         updateNodeCountValidator.validateServiceRoles(stack, instanceIdsByHostgroupMap.entrySet()
                 .stream()
@@ -171,6 +180,7 @@ public class StackOperationService {
                 String instanceGroupName = entry.getKey();
                 int scalingAdjustment = entry.getValue().size() * -1;
                 updateNodeCountValidator.validateScalabilityOfInstanceGroup(stack, instanceGroupName, scalingAdjustment);
+                updateNodeCountValidator.validateInstanceGroupForStopStart(stack, instanceGroupName, scalingAdjustment);
                 updateNodeCountValidator.validateScalingAdjustment(instanceGroupName, scalingAdjustment, stack);
             }
         }
@@ -285,6 +295,8 @@ public class StackOperationService {
                 updateNodeCountValidator.validateServiceRoles(stackWithLists, instanceGroupAdjustmentJson);
                 updateNodeCountValidator.validateStackStatusForStartHostGroup(stackWithLists);
                 updateNodeCountValidator.validateInstanceGroup(stackWithLists, instanceGroupAdjustmentJson.getInstanceGroup());
+                updateNodeCountValidator.validateInstanceGroupForStopStart(stackWithLists,
+                        instanceGroupAdjustmentJson.getInstanceGroup(), instanceGroupAdjustmentJson.getScalingAdjustment());
                 updateNodeCountValidator.validateScalabilityOfInstanceGroup(stackWithLists, instanceGroupAdjustmentJson);
                 updateNodeCountValidator.validateScalingAdjustment(instanceGroupAdjustmentJson, stackWithLists);
                 if (withClusterEvent) {
